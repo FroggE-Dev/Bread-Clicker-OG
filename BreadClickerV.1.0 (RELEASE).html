@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bread Clicker</title>
+<style>
+body {font-family: Arial, sans-serif; background:#f7efe5; margin:0; padding:20px;}
+#breadZone {position: relative; width: 300px; height:300px; margin:auto;}
+#bread, #goldenBread, #platinumBread {font-size:120px; cursor:pointer; user-select:none; position:absolute; top:90px; left:90px;}
+#goldenBread, #platinumBread {display:none;}
+.orbit {position:absolute; top:50%; left:50%; transform-origin:0 0; animation:spin 8s linear infinite;}
+.bakeryOrbit {animation-duration:12s;}
+@keyframes spin {from {transform:rotate(0deg) translateX(120px);} to {transform:rotate(360deg) translateX(120px);}}
+.box {background:#fff; padding:15px; margin:10px auto; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1);}
+ul {padding-left:20px;}
+li {margin-bottom:8px;}
+.container {display:flex; justify-content:center; align-items:flex-start; gap:20px;}
+.sidebar {flex:0 0 300px; background:#fff; padding:15px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1); text-align:left;}
+.gameColumn {flex:0 0 480px;}
+</style>
+</head>
+<body>
+<h1 style="text-align:center;">🍞 Bread Clicker 🍞</h1>
+
+<div class="container">
+    <!-- Main Game Column -->
+    <div class="gameColumn">
+        <div id="breadZone">
+            <div id="bread" onclick="clickBread()">🍞</div>
+            <div id="goldenBread" onclick="clickGoldenBread()">✨🍞✨</div>
+            <div id="platinumBread" onclick="clickPlatinumBread()">💎🍞💎</div>
+        </div>
+
+        <div class="box">
+            <p>Bread: <span id="breadCount">0</span></p>
+            <p>CPS: <span id="cps">0</span></p>
+            <p>Bread Type: <span id="breadName">Sliced Bread</span></p>
+        </div>
+
+        <div class="box">
+            <button onclick="upgradeBread()">Upgrade Bread</button>
+            <p id="upgradeInfo"></p>
+        </div>
+
+        <div class="box" id="shopBox"><h3>Items</h3></div>
+        <div class="box" id="prestigeShopBox"><h3>God Items (Spend Prestige Points)</h3></div>
+
+        <div class="box">
+            <h3>Achievements</h3>
+            <ul id="achievementsList"></ul>
+        </div>
+
+        <div class="box">
+            <h3>Prestige</h3>
+            <button onclick="rebirth()">REBIRTH (1,000,000 🍞)</button>
+            <p>Prestige Points: <span id="prestigePoints">0</span></p>
+        </div>
+
+        <div class="box">
+            <label><input type="checkbox" id="sfxToggle" checked onchange="toggleSFX()"> Enable SFX</label>
+        </div>
+
+        <div class="box">
+            <button onclick="resetProgress()">RESET PROGRESS</button>
+        </div>
+
+        <div class="box">
+            <button onclick="generateSaveCode()">Generate Save Code</button>
+            <button onclick="loadFromSaveCode()">Load From Save Code</button>
+        </div>
+    </div>
+
+    <!-- Instructions Sidebar -->
+    <div class="sidebar">
+        <h3>How to Play</h3>
+        <ul>
+            <li>Click the bread to earn bread points.</li>
+            <li>Upgrade your bread to increase CPS (bread per second).</li>
+            <li>Buy items (Clicker, Bakery, Oven, Factory) to automatically generate bread. Items orbit the bread.</li>
+            <li>Golden Bread spawns randomly every 50s (20% chance) for a big temporary CPS boost.</li>
+            <li>Platinum Bread spawns rarely for an even bigger CPS boost.</li>
+            <li>Achievements unlock as you reach milestones.</li>
+            <li>Rebirth after 1,000,000 bread to earn Prestige Points. Resets bread/items but gives permanent CPS boost.</li>
+            <li>Spend Prestige Points on God Items to permanently enhance your game (5 items total).</li>
+            <li>Use <b>Generate Save Code</b> to save your game. <b>Tip:</b> Copy the code and save it in Notepad or somewhere safe. Use <b>Load From Save Code</b> to restore progress.</li>
+            <li>Toggle SFX using the checkbox, and reset your progress with the "Reset Progress" button.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+// CORE VARIABLES
+let bread=0, baseCps=0, cps=0;
+let breadStage=0, prestige=0;
+let cpsMultiplier=1, goldenActive=false, platinumActive=false;
+let sfxEnabled=true;
+let achievements={};
+let godItemsActive = {goldenHands:false, bakersBlessing:false, divineOven:false, luckyBread:false, platinumTouch:false};
+
+// BREAD STAGES
+const breadStages=[
+{name:"Sliced Bread", icon:"🍞", cost:0, cps:0},
+{name:"Bun", icon:"🥯", cost:500, cps:2},
+{name:"Baguette", icon:"🥖", cost:5000, cps:10},
+{name:"Croissant", icon:"🥐", cost:50000, cps:50},
+{name:"Ultimate Muffin", icon:"🧁", cost:500000, cps:200}
+];
+
+// SHOP ITEMS
+let shopItems=[
+{name:"Clicker", icon:"👆", cps:1, cost:25, baseCost:25, count:0},
+{name:"Bakery", icon:"🏭", cps:10, cost:250, baseCost:250, count:0},
+{name:"Oven", icon:"🔥", cps:50, cost:2000, baseCost:2000, count:0},
+{name:"Factory", icon:"🏭🏭", cps:200, cost:10000, baseCost:10000, count:0}
+];
+
+// GOD ITEMS
+const godItems=[
+{name:"Golden Hands", key:"goldenHands", effect:"+5% permanent CPS", cost:1},
+{name:"Baker’s Blessing", key:"bakersBlessing", effect:"+10% CPS for all items", cost:5},
+{name:"Divine Oven", key:"divineOven", effect:"Start rebirth with one bread upgrade", cost:7},
+{name:"Lucky Bread", key:"luckyBread", effect:"+10% Golden Bread chance", cost:10},
+{name:"Platinum Touch", key:"platinumTouch", effect:"+5% Platinum Bread chance", cost:12}
+];
+
+// AUDIO
+function play(url){if(!sfxEnabled) return; const s=new Audio(url); s.play();}
+function toggleSFX(){sfxEnabled=document.getElementById("sfxToggle").checked;}
+function recalcCps(){
+    let godBonus=0;
+    if(godItemsActive.goldenHands) godBonus+=0.05;
+    if(godItemsActive.bakersBlessing) godBonus+=0.10;
+    cps=Math.floor(baseCps*(1+prestige*0.02+godBonus)*cpsMultiplier);
+}
+
+// CLICK
+function clickBread(){bread++; play("https://actions.google.com/sounds/v1/cartoon/pop.ogg"); checkAchievements(); updateUI();}
+
+// BREAD UPGRADE
+function upgradeBread(){
+    if(breadStage<breadStages.length-1){
+        let next=breadStages[breadStage+1];
+        if(bread>=next.cost){
+            bread-=next.cost;
+            breadStage++;
+            baseCps+=next.cps;
+            recalcCps(); updateUI();
+        }
+    }
+}
+
+// ORBIT
+function addOrbit(icon, cls){
+    let span=document.createElement("span");
+    span.textContent=icon;
+    span.className=cls;
+    span.style.animationDelay=Math.random()*-8+"s";
+    document.getElementById("breadZone").appendChild(span);
+}
+
+// SPAWN GOLDEN / PLATINUM
+function spawnGolden(){if(goldenActive||platinumActive) return; if(Math.random()<0.2*(godItemsActive.luckyBread?1.1:1)){document.getElementById("goldenBread").style.display="block"; setTimeout(()=>document.getElementById("goldenBread").style.display="none",10000);}}
+function clickGoldenBread(){goldenActive=true; document.getElementById("goldenBread").style.display="none"; cpsMultiplier=5; recalcCps(); achievements.golden=true; setTimeout(()=>{cpsMultiplier=1; goldenActive=false; recalcCps();},15000); play("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");}
+
+function spawnPlatinum(){if(goldenActive||platinumActive) return; if(Math.random()<0.01*(godItemsActive.platinumTouch?1.05:1)){document.getElementById("platinumBread").style.display="block"; setTimeout(()=>document.getElementById("platinumBread").style.display="none",8000);}}
+function clickPlatinumBread(){platinumActive=true; document.getElementById("platinumBread").style.display="none"; cpsMultiplier=10; recalcCps(); achievements.platinum=true; setTimeout(()=>{cpsMultiplier=1; platinumActive=false; recalcCps();},20000); play("https://actions.google.com/sounds/v1/cartoon/descending_whistle.ogg");}
+
+// ACHIEVEMENTS
+function checkAchievements(){
+    if(bread>=1) achievements["First Bread"]=true;
+    if(bread>=1000) achievements["1,000 Bread"]=true;
+    if(bread>=10000) achievements["10,000 Bread"]=true;
+    renderAchievements();
+}
+function renderAchievements(){
+    const ul=document.getElementById("achievementsList"); ul.innerHTML="";
+    for(let key in achievements){if(achievements[key]){let li=document.createElement("li"); li.textContent=key; ul.appendChild(li);}}
+}
+
+// PRESTIGE SHOP
+function renderPrestigeShop(){
+    const box=document.getElementById("prestigeShopBox"); box.innerHTML="<h3>God Items (Spend Prestige Points)</h3>";
+    godItems.forEach((item)=>{
+        let btn=document.createElement("button");
+        btn.textContent=`Buy ${item.name} (${item.effect}) - ${item.cost} PP`;
+        btn.onclick=()=>buyGodItem(item.key,item.cost);
+        box.appendChild(btn);
+    });
+}
+function buyGodItem(key,cost){
+    if(prestige>=cost && !godItemsActive[key]){
+        prestige-=cost;
+        godItemsActive[key]=true;
+        recalcCps();
+        updateUI();
+        renderPrestigeShop();
+    }
+}
+
+// REBIRTH / PRESTIGE
+function rebirth(){
+    if(bread<1000000) return;
+    prestige++;
+    achievements["Reborn"]=true;
+    bread=0; baseCps=0; cps=0;
+    breadStage=0;
+    shopItems.forEach(i=>{i.count=0;i.cost=i.baseCost;});
+    document.querySelectorAll(".orbit").forEach(o=>o.remove());
+    if(godItemsActive.divineOven && breadStage===0){breadStage++; baseCps+=breadStages[breadStage].cps;}
+    recalcCps(); updateUI(); renderShop(); renderPrestigeShop();
+    play("https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum_hit.ogg");
+}
+
+// SHOP RENDER
+function renderShop(){
+    const box=document.getElementById("shopBox"); box.innerHTML="<h3>Items</h3>";
+    shopItems.forEach((item,i)=>{
+        let btn=document.createElement("button"); btn.textContent=`Buy ${item.name} (+${item.cps} CPS)`; btn.onclick=()=>buyItem(i); box.appendChild(btn);
+        let p=document.createElement("p"); p.id="item"+i; p.textContent=`Owned: ${item.count} | Cost: ${item.cost}`;
+        box.appendChild(p);
+    });
+}
+
+function buyItem(i){
+    let item=shopItems[i];
+    if(bread>=item.cost){
+        bread-=item.cost;
+        item.count++;
+        let bonus=item.cps;
+        if(godItemsActive.bakersBlessing) bonus*=1.1;
+        baseCps+=bonus;
+        item.cost=Math.floor(item.cost*1.2);
+        addOrbit(item.icon,"orbit");
+        recalcCps(); updateUI(); renderShop();
+    }
+}
+
+// SAVE CODE SYSTEM FIXED
+function generateSaveCode(){
+    const saveData = {
+        bread, baseCps, cps, breadStage, prestige, cpsMultiplier,
+        shopItems: shopItems.map(i => ({name:i.name, cps:i.cps, cost:i.cost, count:i.count, baseCost:i.baseCost})),
+        achievements,
+        godItemsActive
+    };
+    const jsonString = JSON.stringify(saveData);
+    const code = btoa(encodeURIComponent(jsonString));
+    prompt("Here is your save code. Copy it somewhere safe (like Notepad):", code);
+}
+
+function loadFromSaveCode(){
+    let code = prompt("Paste your save code here:");
+    if (!code) return;
+    code = code.trim();
+    try {
+        const jsonString = decodeURIComponent(atob(code));
+        const saveData = JSON.parse(jsonString);
+
+        bread = saveData.bread || 0;
+        baseCps = saveData.baseCps || 0;
+        cps = saveData.cps || 0;
+        breadStage = saveData.breadStage || 0;
+        prestige = saveData.prestige || 0;
+        cpsMultiplier = saveData.cpsMultiplier || 1;
+
+        if(saveData.shopItems){
+            shopItems.forEach((item, i) => {
+                const savedItem = saveData.shopItems[i];
+                if (savedItem) {
+                    item.count = savedItem.count || 0;
+                    item.cost = savedItem.cost || item.baseCost;
+                }
+            });
+        }
+
+        achievements = saveData.achievements || {};
+        godItemsActive = saveData.godItemsActive || godItemsActive;
+
+        recalcCps();
+        updateUI();
+        renderShop();
+        renderPrestigeShop();
+        alert("Save loaded successfully!");
+    } catch(e){
+        alert("Invalid save code! Make sure you copied the full code correctly.");
+    }
+}
+
+// RESET PROGRESS
+function resetProgress() {
+    if(!confirm("Are you sure you want to reset all progress? This cannot be undone.")) return;
+    bread = 0; baseCps = 0; cps = 0; breadStage = 0; prestige = 0; cpsMultiplier = 1;
+    shopItems.forEach(item => {item.count=0; item.cost=item.baseCost;});
+    for(let key in godItemsActive) godItemsActive[key] = false;
+    achievements = {};
+    document.querySelectorAll(".orbit").forEach(o => o.remove());
+    recalcCps();
+    updateUI();
+    renderShop();
+    renderPrestigeShop();
+}
+
+// UPDATE UI
+function updateUI(){
+    document.getElementById("breadCount").textContent=Math.floor(bread);
+    document.getElementById("cps").textContent=cps;
+    document.getElementById("bread").textContent=breadStages[breadStage].icon;
+    document.getElementById("breadName").textContent=breadStages[breadStage].name;
+    document.getElementById("prestigePoints").textContent=prestige;
+    document.getElementById("upgradeInfo").textContent=breadStage<4?`Next: ${breadStages[breadStage+1].name} (${breadStages[breadStage+1].cost})`:"MAX";
+}
+
+// LOOPS
+updateUI(); renderShop(); renderPrestigeShop();
+setInterval(()=>{bread+=cps; updateUI();},1000);
+setInterval(spawnGolden,50000);
+setInterval(spawnPlatinum,60000);
+</script>
+</body>
+</html>
